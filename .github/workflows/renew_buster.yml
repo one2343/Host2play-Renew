@@ -53,15 +53,6 @@ jobs:
           mode: client
 
       # =========================
-      # 🔍 Check IP (系统 IP vs WARP 出口 IP)
-      # =========================
-      - name: 创建WARP网络
-        uses: fscarmen/warp-on-actions@v1.3
-        with:
-          stack: dual
-          mode: client
-
-      # =========================
       # 📦 Node 依赖 + Playwright Chromium
       # =========================
       - name: Install Node dependencies
@@ -83,7 +74,10 @@ jobs:
           7z x -y extensions/buster/buster.zip -oextensions/buster/unpacked
           echo "📌 manifest.json 检查:"
           cat extensions/buster/unpacked/manifest.json
-
+          
+      # =========================
+      # 🔍 Check IP (系统 IP vs WARP 出口 IP)
+      # =========================
       - name: Check IP
         run: |
           curl -s https://api.ipify.org && echo
