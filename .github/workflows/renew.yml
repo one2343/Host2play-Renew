@@ -1,13 +1,14 @@
-name: Host2Play Auto Renew Buster
+name: Host2Play Auto Renew
 
 on:
   workflow_dispatch:
   schedule:
+    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
-  contents: write
-  actions: write
+  contents: write # 👈 注意：清理历史运行记录需要 write 权限
+  actions: write  # 👈 必须添加 actions 读写权限
 
 jobs:
   renew:
@@ -15,18 +16,27 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout private repo
+      # =========================
+      # 📥 检出
+      # =========================
+      - name: Checkout private repo (Host2Play)
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/Host2Play-Renew-Private
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
+      # =========================
+      # ⚡️ Node.js
+      # =========================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      # =========================
+      # 📦 系统依赖
+      # =========================
       - name: Install system dependencies
         working-directory: scripts
         run: |
@@ -39,31 +49,43 @@ jobs:
       - name: Install Hysteria2
         working-directory: scripts
         run: |
-          curl -L -o hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          curl -L -o hysteria \
+            https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           sudo mv hysteria /usr/local/bin/
           hysteria version
 
       # =========================
-      # 📦 安装 Playwright 及 Stealth 隐匿插件
+      # 📦 Node 依赖 + Playwright Chromium
       # =========================
       - name: Install Node dependencies
         working-directory: scripts
         run: |
           npm init -y
-          npm install playwright playwright-extra puppeteer-extra-plugin-stealth
+          npm install playwright
           npx playwright install --with-deps chromium
 
-      - name: Download and Unzip Buster
+      # =========================
+      # 📦 下载 扩展
+      # =========================
+      - name: Download  extension (chromium.zip)
         working-directory: scripts
         run: |
-          mkdir -p extensions/buster
-          wget -O extensions/buster/buster.zip https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip
-          mkdir -p extensions/buster/unpacked
-          7z x -y extensions/buster/buster.zip -oextensions/buster/unpacked
-          echo "📌 manifest.json 检查:"
-          cat extensions/buster/unpacked/manifest.json
+          mkdir -p extensions/nopecha
+          wget -O extensions/nopecha/chromium.zip \
+            https://github.com/NopeCHALLC/nopecha-extension/releases/latest/download/chromium.zip
 
+      - name: Unpack NopeCHA extension
+        working-directory: scripts
+        run: |
+          mkdir -p extensions/nopecha/unpacked
+          7z x -y extensions/nopecha/chromium.zip -oextensions/nopecha/unpacked
+          echo "📌 manifest.json:"
+          cat extensions/nopecha/unpacked/manifest.json
+
+      # =========================
+      # 🚀 执行续费脚本
+      # =========================
       - name: Run renew script
         working-directory: scripts
         env:
@@ -75,6 +97,9 @@ jobs:
           mkdir -p screenshots
           xvfb-run -a node renew.js
 
+      # =========================
+      # 📤 上传截图（路径修正）
+      # =========================
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: always()
@@ -84,11 +109,14 @@ jobs:
           if-no-files-found: warn
           compression-level: 6
 
+      # =========================
+      # 🧹 清理旧运行记录 (保留最近3次)
+      # =========================
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
-        if: always()
+        if: always() # 确保即使前面步骤失败，也会执行清理
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 3
+          retain_days: 0        # 设置保留天数为0，强制按运行次数清理
+          keep_minimum_runs: 3  # 只保留最近 3 次运行
