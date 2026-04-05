@@ -7,7 +7,8 @@ on:
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
-  contents: read
+  contents: write # 👈 注意：清理历史运行记录需要 write 权限
+  actions: write  # 👈 必须添加 actions 读写权限
 
 jobs:
   renew:
@@ -107,3 +108,15 @@ jobs:
           path: scripts/screenshots/**
           if-no-files-found: warn
           compression-level: 6
+
+      # =========================
+      # 🧹 清理旧运行记录 (保留最近3次)
+      # =========================
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        if: always() # 确保即使前面步骤失败，也会执行清理
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0        # 设置保留天数为0，强制按运行次数清理
+          keep_minimum_runs: 3  # 只保留最近 3 次运行
