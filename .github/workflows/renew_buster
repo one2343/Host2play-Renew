@@ -1,0 +1,124 @@
+name: Host2Play Auto Renew Buster
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
+    - cron: "21 5,11,17,23 * * *"
+
+permissions:
+  contents: write # 👈 注意：清理历史运行记录需要 write 权限
+  actions: write  # 👈 必须添加 actions 读写权限
+
+jobs:
+  renew:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      # =========================
+      # 📥 检出
+      # =========================
+      - name: Checkout private repo (Host2Play)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Host2Play-Renew-Private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # ⚡️ Node.js
+      # =========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # =========================
+      # 📦 系统依赖
+      # =========================
+      - name: Install system dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full gnupg
+
+      # =========================
+      # 🌐 安装与配置 Cloudflare WARP
+      # =========================
+      - name: Setup Cloudflare WARP
+        run: |
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ jammy main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt-get update
+          sudo apt-get install -y cloudflare-warp
+          # 注册并配置为代理模式 (Socks5 监听 40000 端口)
+          warp-cli --accept-tos registration new
+          warp-cli --accept-tos mode proxy
+          warp-cli --accept-tos proxy port 40000
+          warp-cli --accept-tos connect
+          sleep 5
+          # 测试 WARP 代理是否连通
+          curl -x socks5://127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace
+
+      # =========================
+      # 📦 Node 依赖 + Playwright Chromium
+      # =========================
+      - name: Install Node dependencies
+        working-directory: scripts
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      # =========================
+      # 📦 下载 Buster 扩展 (直接从 Chrome Web Store 抓取 CRX 并解压)
+      # =========================
+      - name: Download Buster extension
+        working-directory: scripts
+        run: |
+          mkdir -p extensions/buster/unpacked
+          wget -O buster.crx "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=114.0.0.0&acceptformat=crx2,crx3&x=id%3Dmpbjkejclgfgadiemniefiejeghafcfh%26uc"
+          # 使用 7z 解压 CRX (CRX本质是带有特殊头部的 ZIP)
+          7z x -y buster.crx -oextensions/buster/unpacked
+          # 删除可能导致加载错误的 _metadata 文件夹
+          rm -rf extensions/buster/unpacked/_metadata
+          echo "📌 manifest.json:"
+          cat extensions/buster/unpacked/manifest.json
+
+      # =========================
+      # 🚀 执行续费脚本
+      # =========================
+      - name: Run renew script
+        working-directory: scripts
+        env:
+          RENEW_URL: ${{ secrets.RENEW_URL }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          mkdir -p screenshots
+          xvfb-run -a node renew.js
+
+      # =========================
+      # 📤 上传截图（路径修正）
+      # =========================
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: scripts/screenshots/**
+          if-no-files-found: warn
+          compression-level: 6
+
+      # =========================
+      # 🧹 清理旧运行记录 (保留最近3次)
+      # =========================
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        if: always()
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 3
