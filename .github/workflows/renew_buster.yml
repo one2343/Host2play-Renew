@@ -3,12 +3,11 @@ name: Host2Play Auto Renew Buster
 on:
   workflow_dispatch:
   schedule:
-    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
-  contents: write # 清理历史运行记录需要 write 权限
-  actions: write  # 必须添加 actions 读写权限
+  contents: write
+  actions: write
 
 jobs:
   renew:
@@ -16,9 +15,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # =========================
-      # 📥 检出
-      # =========================
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
@@ -26,35 +22,28 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # =========================
-      # ⚡️ Node.js
-      # =========================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # =========================
-      # 📦 系统依赖
-      # =========================
       - name: Install system dependencies
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full gnupg
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
 
       # =========================
-      # 🌐 安装与配置 Cloudflare WARP
+      # 📡 安装 Hysteria2 (恢复为你最初的代理方案)
       # =========================
-      - name: 创建WARP网络
-        uses: fscarmen/warp-on-actions@v1.3
-        with:
-          stack: dual
-          mode: client
+      - name: Install Hysteria2
+        working-directory: scripts
+        run: |
+          curl -L -o hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          chmod +x hysteria
+          sudo mv hysteria /usr/local/bin/
+          hysteria version
 
-      # =========================
-      # 📦 Node 依赖 + Playwright Chromium
-      # =========================
       - name: Install Node dependencies
         working-directory: scripts
         run: |
@@ -62,9 +51,6 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      # =========================
-      # 📦 下载并解压 Buster (官方 GitHub Release)
-      # =========================
       - name: Download and Unzip Buster
         working-directory: scripts
         run: |
@@ -74,21 +60,11 @@ jobs:
           7z x -y extensions/buster/buster.zip -oextensions/buster/unpacked
           echo "📌 manifest.json 检查:"
           cat extensions/buster/unpacked/manifest.json
-          
-      # =========================
-      # 🔍 Check IP (系统 IP vs WARP 出口 IP)
-      # =========================
-      - name: Check IP
-        run: |
-          curl -s https://api.ipify.org && echo
-          curl -s https://ipinfo.io
 
-      # =========================
-      # 🚀 执行续费脚本
-      # =========================
       - name: Run renew script
         working-directory: scripts
         env:
+          HY2_URL: ${{ secrets.HY2_URL }}
           RENEW_URL: ${{ secrets.RENEW_URL }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -96,9 +72,6 @@ jobs:
           mkdir -p screenshots
           xvfb-run -a node renew.js
 
-      # =========================
-      # 📤 上传截图
-      # =========================
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: always()
@@ -108,9 +81,6 @@ jobs:
           if-no-files-found: warn
           compression-level: 6
 
-      # =========================
-      # 🧹 清理旧运行记录
-      # =========================
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
         if: always()
