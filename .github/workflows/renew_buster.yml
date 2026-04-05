@@ -1,4 +1,4 @@
-name: Host2Play Auto Renew Buster
+name: Host2Play Auto Renew
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ on:
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
-  contents: write # 👈 注意：清理历史运行记录需要 write 权限
-  actions: write  # 👈 必须添加 actions 读写权限
+  contents: write # 清理历史运行记录需要 write 权限
+  actions: write  # 必须添加 actions 读写权限
 
 jobs:
   renew:
@@ -19,7 +19,7 @@ jobs:
       # =========================
       # 📥 检出
       # =========================
-      - name: Checkout private repo (Host2Play)
+      - name: Checkout private repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/Host2Play-Renew-Private
@@ -52,14 +52,24 @@ jobs:
           echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ jammy main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
           sudo apt-get update
           sudo apt-get install -y cloudflare-warp
-          # 注册并配置为代理模式 (Socks5 监听 40000 端口)
+          
           warp-cli --accept-tos registration new
           warp-cli --accept-tos mode proxy
           warp-cli --accept-tos proxy port 40000
           warp-cli --accept-tos connect
           sleep 5
-          # 测试 WARP 代理是否连通
-          curl -x socks5://127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace
+
+      # =========================
+      # 🔍 Check IP (系统 IP vs WARP 出口 IP)
+      # =========================
+      - name: Check IP
+        run: |
+          echo "--- 原生 GitHub Actions Runner IP ---"
+          curl -s https://api.ipify.org && echo
+          curl -s https://ipinfo.io
+          echo -e "\n--- WARP 代理出口 IP (Socks5 40000) ---"
+          curl -s -x socks5://127.0.0.1:40000 https://api.ipify.org && echo
+          curl -s -x socks5://127.0.0.1:40000 https://ipinfo.io
 
       # =========================
       # 📦 Node 依赖 + Playwright Chromium
@@ -72,18 +82,16 @@ jobs:
           npx playwright install --with-deps chromium
 
       # =========================
-      # 📦 下载 Buster 扩展 (直接从 Chrome Web Store 抓取 CRX 并解压)
+      # 📦 下载并解压 Buster (官方 GitHub Release)
       # =========================
-      - name: Download Buster extension
+      - name: Download and Unzip Buster
         working-directory: scripts
         run: |
+          mkdir -p extensions/buster
+          wget -O extensions/buster/buster.zip https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip
           mkdir -p extensions/buster/unpacked
-          wget -O buster.crx "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=114.0.0.0&acceptformat=crx2,crx3&x=id%3Dmpbjkejclgfgadiemniefiejeghafcfh%26uc"
-          # 使用 7z 解压 CRX (CRX本质是带有特殊头部的 ZIP)
-          7z x -y buster.crx -oextensions/buster/unpacked
-          # 删除可能导致加载错误的 _metadata 文件夹
-          rm -rf extensions/buster/unpacked/_metadata
-          echo "📌 manifest.json:"
+          7z x -y extensions/buster/buster.zip -oextensions/buster/unpacked
+          echo "📌 manifest.json 检查:"
           cat extensions/buster/unpacked/manifest.json
 
       # =========================
@@ -100,7 +108,7 @@ jobs:
           xvfb-run -a node renew.js
 
       # =========================
-      # 📤 上传截图（路径修正）
+      # 📤 上传截图
       # =========================
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
@@ -112,7 +120,7 @@ jobs:
           compression-level: 6
 
       # =========================
-      # 🧹 清理旧运行记录 (保留最近3次)
+      # 🧹 清理旧运行记录
       # =========================
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
