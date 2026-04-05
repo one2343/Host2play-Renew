@@ -21,7 +21,7 @@ jobs:
       - name: Checkout private repo (Host2Play)
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/Host2play-Auto-Private
+          repository: ${{ github.repository_owner }}/Host2Play-Renew-Private
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
