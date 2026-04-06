@@ -3,12 +3,12 @@ name: Host2Play Auto Renew buster
 on:
   workflow_dispatch:
   schedule:
-    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
+    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
-  contents: write # 👈 注意：清理历史运行记录需要 write 权限
-  actions: write  # 👈 必须添加 actions 读写权限
+  contents: write 
+  actions: write
 
 jobs:
   renew:
@@ -44,6 +44,14 @@ jobs:
           sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
 
       # =========================
+      # 🛡️ 启动 Cloudflare WARP (全局伪装出口 IP)
+      # =========================
+      - name: Setup Cloudflare WARP
+        uses: fscarmen/warp-on-actions@v1.2
+        with:
+          stack: dual # 开启 IPv4 和 IPv6 支持
+
+      # =========================
       # 📦 Node 依赖 + Playwright Chromium
       # =========================
       - name: Install Node dependencies
@@ -60,7 +68,6 @@ jobs:
         working-directory: scripts
         run: |
           mkdir -p extensions/buster
-          # 动态获取 Github Release 的最新 chrome.zip 版本，失败则回退到指定版本
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/dessant/buster/releases/latest || echo "")
           ZIP_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | endswith("-chrome.zip")) | .browser_download_url' || echo "")
           
@@ -91,7 +98,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           mkdir -p screenshots
-          xvfb-run -a node renew_buster.js
+          xvfb-run -a node renew.js
 
       # =========================
       # 📤 上传截图
@@ -106,7 +113,7 @@ jobs:
           compression-level: 6
 
       # =========================
-      # 🧹 清理旧运行记录 (保留最近3次)
+      # 🧹 清理旧运行记录
       # =========================
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
@@ -114,5 +121,5 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 0        # 设置保留天数为0，强制按运行次数清理
-          keep_minimum_runs: 3  # 只保留最近 3 次运行
+          retain_days: 0
+          keep_minimum_runs: 3
