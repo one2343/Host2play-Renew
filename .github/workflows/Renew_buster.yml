@@ -98,7 +98,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           mkdir -p screenshots
-          xvfb-run -a node renew_buster.js
+          xvfb-run -a stdbuf -oL -eL node renew_buster.js
 
       # =========================
       # 📤 上传截图
