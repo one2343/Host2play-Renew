@@ -16,9 +16,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # =========================
-      # 📥 检出
-      # =========================
       - name: Checkout private repo (Host2Play)
         uses: actions/checkout@v4
         with:
@@ -26,34 +23,22 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # =========================
-      # ⚡️ Node.js
-      # =========================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # =========================
-      # 📦 系统依赖
-      # =========================
       - name: Install system dependencies
         working-directory: scripts
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
 
-      # =========================
-      # 🛡️ 启动 Cloudflare WARP (全局伪装出口 IP)
-      # =========================
       - name: Setup Cloudflare WARP
         uses: fscarmen/warp-on-actions@v1.2
         with:
           stack: dual # 开启 IPv4 和 IPv6 支持
 
-      # =========================
-      # 📦 Node 依赖 + Playwright Chromium
-      # =========================
       - name: Install Node dependencies
         working-directory: scripts
         run: |
@@ -61,9 +46,7 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      # =========================
-      # 📦 下载扩展 (Buster)
-      # =========================
+
       - name: Download Buster extension
         working-directory: scripts
         run: |
@@ -87,9 +70,6 @@ jobs:
           echo "📌 manifest.json:"
           cat extensions/buster/unpacked/manifest.json
 
-      # =========================
-      # 🚀 执行续费脚本
-      # =========================
       - name: Run renew script
         working-directory: scripts
         env:
@@ -100,9 +80,6 @@ jobs:
           mkdir -p screenshots
           xvfb-run -a stdbuf -oL -eL node renew_buster.js
 
-      # =========================
-      # 📤 上传截图
-      # =========================
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: always()
@@ -112,9 +89,6 @@ jobs:
           if-no-files-found: warn
           compression-level: 6
 
-      # =========================
-      # 🧹 清理旧运行记录
-      # =========================
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
         if: always()
