@@ -3,7 +3,7 @@ name: Host2Play Auto Renew buster
 on:
   workflow_dispatch:
   schedule:
-    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时
+    # 每天 0:00 / 6:00 / 12:00 / 18:00 UTC
     - cron: "21 5,11,17,23 * * *"
 
 permissions:
@@ -32,7 +32,8 @@ jobs:
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
+          # 核心修复：安装 expect 以获取 unbuffer 命令
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full expect
 
       - name: Setup Cloudflare WARP
         uses: fscarmen/warp-on-actions@v1.2
@@ -45,7 +46,6 @@ jobs:
           npm init -y
           npm install playwright
           npx playwright install --with-deps chromium
-
 
       - name: Download Buster extension
         working-directory: scripts
@@ -76,9 +76,11 @@ jobs:
           RENEW_URL: ${{ secrets.RENEW_URL }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          FORCE_COLOR: 1 # 欺骗 Node.js 开启彩色日志输出
+          DEBUG: pw:api  # 开启 Playwright 底层动作日志，方便排查卡在哪一步
         run: |
           mkdir -p screenshots
-          xvfb-run -a stdbuf -oL -eL node renew_buster.js
+          unbuffer xvfb-run -a node renew_buster.js
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
