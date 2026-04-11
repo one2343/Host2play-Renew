@@ -43,9 +43,9 @@ jobs:
         working-directory: scripts
         run: |
           npm init -y
-          npm install playwright
+          npm install playwright playwright-extra puppeteer-extra-plugin-stealth
+          # =========================================================================
           npx playwright install --with-deps chromium
-
 
       - name: Download Buster extension
         working-directory: scripts
