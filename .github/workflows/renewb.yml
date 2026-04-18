@@ -37,7 +37,7 @@ jobs:
       - name: Setup Cloudflare WARP
         uses: fscarmen/warp-on-actions@v1.2
         with:
-          stack: dual # 开启 IPv4 和 IPv6 支持
+          stack: ipv4
 
       - name: Install Node dependencies
         working-directory: scripts
