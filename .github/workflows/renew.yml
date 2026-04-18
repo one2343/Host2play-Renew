@@ -1,4 +1,4 @@
-name: Host2Play Auto Renew gost (Python)
+name: Auto Renew Server Script
 
 on:
   workflow_dispatch:
