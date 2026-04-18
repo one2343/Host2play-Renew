@@ -1,4 +1,4 @@
-name: Host2Play Auto Renew buster
+name: Host2Play Auto Renew gost
 
 on:
   workflow_dispatch:
