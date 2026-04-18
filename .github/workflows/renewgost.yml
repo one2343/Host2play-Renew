@@ -1,4 +1,4 @@
-name: Host2Play Auto Renew gost
+name: Host2Play Auto Renew gost (Python)
 
 on:
   workflow_dispatch:
@@ -23,21 +23,29 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
         with:
-          node-version: 20
+          python-version: '3.10'
+          cache: 'pip'
 
-      - name: Install system dependencies
+      - name: Install system dependencies & Chrome
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
+          sudo apt-get install -y xvfb ffmpeg unzip curl jq p7zip-full
+          
+          # 安装 Google Chrome (DrissionPage 强依赖)
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
       - name: Start the GOST proxy forwarding
         if: ${{ env.GOST_PROXY != '' }}
         env:
           GOST_PROXY: ${{ secrets.GOST_PROXY }}
+        working-directory: scripts
         run: |
           VERSION=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest \
             | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
@@ -51,54 +59,31 @@ jobs:
           curl -s -x http://127.0.0.1:8080 https://api.ipify.org \
             | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g'
 
-      - name: Install Node dependencies
+      - name: Install Python dependencies
         working-directory: scripts
         run: |
-          npm init -y
-          npm install playwright playwright-extra puppeteer-extra-plugin-stealth
-          npx playwright install --with-deps chromium
+          python -m pip install --upgrade pip
+          pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
-      - name: Download Buster extension
-        working-directory: scripts
-        run: |
-          mkdir -p extensions/buster
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/dessant/buster/releases/latest || echo "")
-          ZIP_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | endswith("-chrome.zip")) | .browser_download_url' || echo "")
-          
-          if [ -z "$ZIP_URL" ] || [ "$ZIP_URL" == "null" ]; then
-            echo "⚠️ 获取最新版本失败，使用预设回退版本"
-            ZIP_URL="https://github.com/dessant/buster/releases/download/v3.1.1/buster_captcha_solver_for_humans-3.1.1-chrome.zip"
-          fi
-          
-          echo "📥 下载地址: $ZIP_URL"
-          wget -O extensions/buster/buster.zip "$ZIP_URL"
-
-      - name: Unpack Buster extension
-        working-directory: scripts
-        run: |
-          mkdir -p extensions/buster/unpacked
-          unzip -o extensions/buster/buster.zip -d extensions/buster/unpacked
-          echo "📌 manifest.json:"
-          cat extensions/buster/unpacked/manifest.json
-
-      - name: Run renew script
+      - name: Run Python renew script
         working-directory: scripts
         env:
           RENEW_URL: ${{ secrets.RENEW_URL }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          USE_LOCAL_PROXY: ${{ secrets.GOST_PROXY != '' && 'true' || 'false' }}
+          # 自动映射你原有的 Secret 名称到 Python 脚本读取的变量名
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PROXY: ${{ secrets.GOST_PROXY != '' && '127.0.0.1:8080' || '' }}
         run: |
-          mkdir -p screenshots
-          xvfb-run -a stdbuf -oL -eL node renew_gost.js
+          # Python 代码内部已封装 Xvfb 启动逻辑，直接运行即可
+          python main.py
 
-      - name: Upload screenshots
+      - name: Upload Error Reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: screenshots
-          path: scripts/screenshots/**
-          if-no-files-found: warn
+          name: debug-reports
+          path: scripts/*.html
+          if-no-files-found: ignore
           compression-level: 6
 
       - name: Delete old workflow runs
