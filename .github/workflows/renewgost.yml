@@ -1,4 +1,4 @@
-name: Host2Play Auto Renew gost
+name: Host2Play Auto Renew buster
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
           sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
 
       - name: 🛡️ 启动 GOST 代理转发
-        if: ${{ secrets.GOST_PROXY != '' }}
+        if: ${{ env.GOST_PROXY != '' }}
         env:
           GOST_PROXY: ${{ secrets.GOST_PROXY }}
         run: |
@@ -90,7 +90,7 @@ jobs:
           USE_LOCAL_PROXY: ${{ secrets.GOST_PROXY != '' && 'true' || 'false' }}
         run: |
           mkdir -p screenshots
-          xvfb-run -a stdbuf -oL -eL node renew_gost.js
+          xvfb-run -a stdbuf -oL -eL node renew_buster.js
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
