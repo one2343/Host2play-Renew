@@ -90,7 +90,7 @@ jobs:
           USE_LOCAL_PROXY: ${{ secrets.GOST_PROXY != '' && 'true' || 'false' }}
         run: |
           mkdir -p screenshots
-          xvfb-run -a stdbuf -oL -eL node renew_buster.js
+          xvfb-run -a stdbuf -oL -eL node renew_gost.js
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
