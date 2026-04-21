@@ -31,7 +31,7 @@ jobs:
       - name: 🌐 设置 WARP 出口
         uses: fscarmen/warp-on-actions@v1.2
         with:
-          stack: dual
+          stack: ipv4
 
       - name: 🛠️ 安装系统依赖
         working-directory: scripts
@@ -51,15 +51,18 @@ jobs:
           pip install DrissionPage requests SpeechRecognition pydub
 
       - name: 🚀 运行续期脚本
-        working-directory: scripts
+        uses: nick-fields/retry@v3
         env:
           RENEW_URL: ${{ secrets.RENEW_URL }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           PYTHONIOENCODING: utf-8
           PYTHONUNBUFFERED: "1"
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -u renew_warp.py
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 60
+          command: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -u main.py
 
       - name: 📸 上传报错截图
         uses: actions/upload-artifact@v4
