@@ -1,0 +1,122 @@
+name: Auto Renew Server Warp
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时
+    - cron: "21 5,11,17,23 * * *"
+
+permissions:
+  contents: write 
+  actions: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 下载私库脚本及配置
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Host2Play-Renew-Private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      - name: 📦 解压历史浏览器配置
+        working-directory: scripts
+        run: |
+          if [ -f "profile.tar.gz" ]; then
+            echo "✅ 发现历史浏览器配置压缩包，正在解压..."
+            tar -xzf profile.tar.gz
+          else
+            echo "⚠️ 未发现历史配置，本次将创建全新的浏览器环境..."
+            mkdir -p chrome_profile
+          fi
+
+      - name: 🐍 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 🌐 设置 WARP 出口
+        uses: fscarmen/warp-on-actions@v1.2
+        with:
+          stack: ipv4
+
+      - name: 🛠️ 安装系统依赖
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg unzip curl jq p7zip-full
+          
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: 🐍 安装 Python 依赖
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install DrissionPage requests SpeechRecognition pydub
+
+      - name: 🚀 运行续期脚本
+        working-directory: scripts
+        env:
+          RENEW_URL: ${{ secrets.RENEW_URL }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: "1"
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -u renew_warp.py
+
+      - name: 💾 打包并推送浏览器配置到私库
+        if: always() # 无论成功失败，都保存积累的 Cookie 和环境特征
+        working-directory: scripts
+        run: |
+          echo "🧹 正在清理无用的庞大缓存并打包..."
+          # 排除 Cache、GPUCache 等无用且庞大的文件夹，只保留 Cookie 和核心配置
+          tar -czvf profile.tar.gz \
+            --exclude='chrome_profile/Default/Cache' \
+            --exclude='chrome_profile/Default/Code Cache' \
+            --exclude='chrome_profile/Default/GPUCache' \
+            --exclude='chrome_profile/Default/Service Worker/CacheStorage' \
+            chrome_profile/
+          
+          echo "🚀 正在推送到私有仓库..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add profile.tar.gz
+          
+          # 检查是否有文件变更
+          if git diff-index --quiet HEAD --; then
+            echo "ℹ️ 配置文件无显著变化，无需推送。"
+          else
+            # 使用 [skip ci] 防止触发私库中可能存在的其他 Actions 导致死循环
+            git commit -m "chore: update browser profile cache [skip ci]"
+            git push origin main
+            echo "✅ 浏览器配置已成功更新至私库！"
+          fi
+
+      - name: 📸 上传报错截图
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-reports
+          path: |
+            scripts/*.html
+            scripts/*.jpg
+          if-no-files-found: ignore
+          compression-level: 6
+
+      - name: 🧹 清理旧的运行记录
+        uses: Mattraks/delete-workflow-runs@v2
+        if: always()
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 2
