@@ -51,18 +51,15 @@ jobs:
           pip install DrissionPage requests SpeechRecognition pydub
 
       - name: 🚀 运行续期脚本
-        uses: nick-fields/retry@v3
+        working-directory: scripts
         env:
           RENEW_URL: ${{ secrets.RENEW_URL }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           PYTHONIOENCODING: utf-8
           PYTHONUNBUFFERED: "1"
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          retry_wait_seconds: 60
-          command: cd scripts && xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -u renew_warp.py
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -u renew_warp.py
 
       - name: 📸 上传报错截图
         uses: actions/upload-artifact@v4
